@@ -29,10 +29,10 @@ quitPattern = re.compile( r'^(quit|q|stop|exit)$' )
 
 # Get the path to the log file.
 print()
-while not os.path.isfile(logFilePath):
+while not os.path.isfile( logFilePath ):
   print( 'Path to log file: ' )
   logFilePath = cleanPath(input())
-  if quitPattern.search(logFilePath.lower()):
+  if quitPattern.search( logFilePath.lower() ):
     print( 'exiting' )
     sys.exit()
   if not os.path.isfile(logFilePath):
@@ -68,12 +68,11 @@ while not goodNewLogFilePath:
     overWriteInput = input().lower()
     if overWriteInput == 'yes':
       break
-  elif not os.path.exists( os.path.dirname(newLogFile)):
+  elif not os.path.exists( os.path.dirname(newLogFile) ):
     newPath = os.path.dirname( newLogFile )
     print( "the directory '" + newPath + "' doesn't exist." )
     print( 'create directory path "' + newPath + '"? [y/n]' )
     createPathInput = input().lower()
-    print( 'here' )
     if createPathInput == 'y':
       try:
         os.makedirs( newPath )
@@ -113,60 +112,56 @@ multipleBindingPattern = re.compile( r'''
 
 paramPattern     = re.compile( r'^\s+(and\s+)?[^\s]+=\?,?$' )
 newQueryPattern  = re.compile( r'^\s+(insert|select|update|delete\b)' )
-# methodPattern    = re.compile( r'^\+{3} .*$\n' )
+methodPattern    = re.compile( r'^\+{3} .*$' )
 
 # 2017-03-08 14:01:02,324 [http-nio-8080-exec-3] DEBUG hibernate.SQL  -
 debugPattern = re.compile( r'^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d+\s\[.*?\]\s(ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\shibernate\.SQL\s+-\s*$' )
 hibernatePattern = re.compile( r'^Hibernate:.*' )
 
 throwAwayPattern = re.compile( r'''
-  ^
-  (\s+values$)|
-  (
-    \s+
-    \(
-    (\?(,\s)?)+
-    \)
-  )
+  (^\s+values$) |
+  (^\s+\((\?(,\s)?)+\)) |
+  (\/java\s.*?Dgrails\.home=.*?classpath.*?IntelliJ\sIDEA) |
+  (^[-\d\s:,]+\[.*?\]\s
+    DEBUG\s+type\.BasicTypeRegistry\s+-\s+Adding\s+type\s+registration.*?->\s+org\.hibernate\.type\..*?Type\@
+  ) |
+  (^[-\d\s:,]+\[.*?\]\s+
+    INFO\s+type\.BasicTypeRegistry\s+-\s+Type\sregistration\s+\[.*?\]\s+overrides\s+previous
+  ) |
+  (^[-\d\s:,]+\[.*?\]\s+
+    TRACE\s+type\.TypeFactory\s+-\s+Scoping\s+types\s+to\s+session\s+factory\s+org\.hibernate\.impl\.SessionFactoryImpl\@
+  ) |
+  (^\|Configuring\s+classpath$)             |
+  (^\|Compiling\s+\d+\s+source\s+files$)    |
+  (^\|Packaging\s+Grails\s+application$)    |
+  (^\|Running\s+Grails\s+application$)      |
+  (^\|Enabling\s+Tomcat\s+NIO\s+connector$) |
+  (^Configuring\s+Spring\s+Security\s+(Core|UI)\s+\.+$) |
+  (^\.+\s+finished\s+configuring\s+Spring\s+Security\s+(Core|UI)$) |
+  (^Testing\s+started\s+at\s+\d+:\d+\s+[AP]M\s+\.+$) |
+  (^\.+$)
   ''', re.VERBOSE )
-
-# remove duplicate queries
-inDebug = False
-temp = open( tempFileA, 'w', encoding='utf8' )
-with open( logFilePath, encoding='utf8' ) as log:
-  for line in log:
-    if debugPattern.search( line ):
-      temp.write( line.rstrip() + '\n' )
-      inDebug = True
-    elif hibernatePattern.search( line ):
-      inDebug = False
-    else:
-      if inDebug:
-        pass
-      else:
-        temp.write( line.rstrip() + '\n' )
-temp.close()
 
 
 # Get a dictionary of values found
 foundValues = {}
-with open( tempFileA, 'r', encoding='utf8' ) as log:
+with open( logFilePath, 'r', encoding='utf8' ) as log:
   for line in log:
     if foundPattern.search(line):
       mo = foundPattern.search(line)
       foundValues[mo[2]] = mo[1]
 
-temp = open( tempFileB, 'w', encoding='utf8' )
-with open( tempFileA, 'r', encoding='utf8' ) as log:
+
+temp = open( tempFileA, 'w', encoding='utf8' )
+with open( logFilePath, 'r', encoding='utf8' ) as log:
   for line in list(log):
     line = re.sub( r'\s{4}', '  ', line )
     temp.write( line )
 temp.close()
 
 
-
-temp = open( tempFileA, 'w', encoding='utf8' )
-with open( tempFileB, 'r', encoding='utf8' ) as log:
+temp = open( tempFileB, 'w', encoding='utf8' )
+with open( tempFileA, 'r', encoding='utf8' ) as log:
   lines = reversed( list( log ))
   for line in lines:
 
@@ -218,7 +213,6 @@ with open( tempFileB, 'r', encoding='utf8' ) as log:
         temp.write( line.rstrip() + '    ' + bindings[paramCount] + '\n' )
       except:
         pass
-        # temp.write( '....except:paramPattern: ' + line.rstrip() + '\n' )
       paramCount += 1
 
 
@@ -236,6 +230,10 @@ with open( tempFileB, 'r', encoding='utf8' ) as log:
       clearBindings()
 
 
+    elif methodPattern.search(line):
+      temp.write( line.rstrip() + '\n\n\n' )
+
+
     else:
       temp.write( line.rstrip() + '\n' )
 
@@ -243,7 +241,7 @@ temp.close()
 
 
 newLog = open( newLogFile, 'w' )
-with open( tempFileA, 'r' ) as log:
+with open( tempFileB, 'r' ) as log:
   lines = reversed(list(log))
   for line in lines:
     newLog.write( line )
