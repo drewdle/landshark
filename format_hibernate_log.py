@@ -116,7 +116,7 @@ newQueryPattern  = re.compile( r'^\s+(insert|select|update|delete\b)' )
 # methodPattern    = re.compile( r'^\+{3} .*$\n' )
 
 # 2017-03-08 14:01:02,324 [http-nio-8080-exec-3] DEBUG hibernate.SQL  -
-debugPattern = re.compile( r'^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d+\s\[.*?\]\sDEBUG\shibernate\.SQL\s+-.*' )
+debugPattern = re.compile( r'^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d+\s\[.*?\]\s(ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\shibernate\.SQL\s+-\s*$' )
 hibernatePattern = re.compile( r'^Hibernate:.*' )
 
 throwAwayPattern = re.compile( r'''
