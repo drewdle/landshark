@@ -89,7 +89,11 @@ while not goodNewLogFilePath:
 print( 'working...\n' )
 
 # 2017-02-27 10:38:27,012 [http-nio-8080-exec-8] TRACE sql.BasicExtractor  - found [true] as column [account3_69_0_]
-foundPattern = re.compile( r'TRACE\s+.*?found \[(.*?)\] as column \[(.*?)\]' )
+foundPattern = re.compile( r'TRACE\s+.*?found\s+\[(.*?)\]\s+as\s+column\s+\[(.*?)\]' )
+
+# found [1139] as column [owner26_58_0_]
+# found [Because there are no other funding sources associated with this transaction, these exhibits are Not Applicable] as column [formula4_0_]
+
 
 # 2017-02-27 10:38:27,012 [http-nio-8080-exec-8] TRACE sql.BasicExtractor  - found [false] as column [account4_69_0_]
 asPattern = re.compile( r'(?<!\])\s+as\s+([A-z0-9\.\_]+),?' )
@@ -97,18 +101,9 @@ asPattern = re.compile( r'(?<!\])\s+as\s+([A-z0-9\.\_]+),?' )
 # 2017-02-27 10:38:27,011 [http-nio-8080-exec-8] TRACE sql.BasicBinder  - binding parameter [1] as [BIGINT] - 1070
 bindPattern = re.compile( r'binding parameter \[\d+\] as \[.*?\] -(\s(.*))' )
 
-multipleParamPattern = re.compile( r'''
-  ^\s+\(
-  (\?
-  (,\s)?)+
-  \)
-  ''', re.VERBOSE )
+multipleParamPattern = re.compile( r'''^\s+\( (\? (,\s)?)+ \)''', re.VERBOSE )
 
-multipleBindingPattern = re.compile( r'''
-  ^\s+\(
-  ((\w+(,\s)?)+)
-  \)
-  ''', re.VERBOSE )
+multipleBindingPattern = re.compile( r'''^\s+\( ((\w+(,\s)?)+) \)''', re.VERBOSE )
 
 paramPattern     = re.compile( r'^\s+(and\s+)?[^\s]+=\?,?$' )
 newQueryPattern  = re.compile( r'^\s+(insert|select|update|delete\b)' )
@@ -143,9 +138,50 @@ throwAwayPattern = re.compile( r'''
   ''', re.VERBOSE )
 
 
+# remove duplicate queries
+inDebug = False
+temp = open( tempFileA, 'w', encoding='utf8' )
+with open( logFilePath, encoding='utf8' ) as log:
+  for line in log:
+    if debugPattern.search( line ):
+      temp.write( line.rstrip() + '\n' )
+      inDebug = True
+    elif hibernatePattern.search( line ):
+      inDebug = False
+    else:
+      if inDebug:
+        pass
+      else:
+        temp.write( line.rstrip() + '\n' )
+temp.close()
+
+# putting multiline strings on one line
+orphan = False
+temp = open( tempFileB, 'w', encoding='utf8' )
+with open( tempFileA, encoding='utf8' ) as log:
+  for line in log:
+    openCount = line.count('[')
+    closeCount = line.count(']')
+    if orphan:
+      if line[0].isalpha() or line[0] == '"' or line[0] == '}':
+        temp.write( ' ' )
+
+    temp.write( line.rstrip() )
+
+    if openCount > closeCount:
+      orphan = True
+    elif openCount < closeCount:
+      orphan = False
+      temp.write( '\n' )
+    else:
+      if not orphan:
+        temp.write( '\n' )
+temp.close()
+
+
 # Get a dictionary of values found
 foundValues = {}
-with open( logFilePath, 'r', encoding='utf8' ) as log:
+with open( tempFileB, 'r', encoding='utf8' ) as log:
   for line in log:
     if foundPattern.search(line):
       mo = foundPattern.search(line)
@@ -153,7 +189,7 @@ with open( logFilePath, 'r', encoding='utf8' ) as log:
 
 
 temp = open( tempFileA, 'w', encoding='utf8' )
-with open( logFilePath, 'r', encoding='utf8' ) as log:
+with open( tempFileB, 'r', encoding='utf8' ) as log:
   for line in list(log):
     line = re.sub( r'\s{4}', '  ', line )
     temp.write( line )
