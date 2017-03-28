@@ -6,9 +6,9 @@ import re, os, sys, time, io
 
 def cleanPath( pathIn ):
   sep = os.path.sep
-  if sep == '\\':
-    sep = '\\\\'
-  newPath = re.sub( r'[\\/]', sep, pathIn )
+  if sep == "\\":
+    sep = "\\\\" # for windows
+  newPath = re.sub( r"[\\/]", sep, pathIn )
   return newPath
 
 
@@ -16,12 +16,14 @@ def clearBindings():
   bindings[:] = []
 
 
-logFilePath = ''
-newLogFile  = ''
-tempFileA   = 'temp_logA.tmplog'
-tempFileB   = 'temp_logB.tmplog'
-paramCount  = 0
-bindings    = []
+logFilePath   = ""
+newLogFile    = ""
+debugFile     = ""
+debugFileTemp = ""
+tempFileA     = "temp_logA.tmplog"
+tempFileB     = "temp_logB.tmplog"
+paramCount    = 0
+bindings      = []
 
 
 quitPattern = re.compile( r'^(quit|q|stop|exit)$' )
@@ -85,20 +87,23 @@ while not goodNewLogFilePath:
       continue
 
 
+debugFile = newLogFile + ".debug"
+debugFileTemp = debugFile + ".tmp"
+
+
 # let's go!
 print( 'working...\n' )
 
-# 2017-02-27 10:38:27,012 [http-nio-8080-exec-8] TRACE sql.BasicExtractor  - found [true] as column [account3_69_0_]
-foundPattern = re.compile( r'TRACE\s+.*?found\s+\[(.*?)\]\s+as\s+column\s+\[(.*?)\]' )
+foundPattern = re.compile( r'''
+  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
+  .*?\s+-\s+found\s+
+  \[(.*?)\]\]?\s+as\s+
+  column\s+
+  \[([^\]]+)\]
+  ''', re.VERBOSE )
 
-# found [1139] as column [owner26_58_0_]
-# found [Because there are no other funding sources associated with this transaction, these exhibits are Not Applicable] as column [formula4_0_]
-
-
-# 2017-02-27 10:38:27,012 [http-nio-8080-exec-8] TRACE sql.BasicExtractor  - found [false] as column [account4_69_0_]
 asPattern = re.compile( r'(?<!\])\s+as\s+([A-z0-9\.\_]+),?' )
 
-# 2017-02-27 10:38:27,011 [http-nio-8080-exec-8] TRACE sql.BasicBinder  - binding parameter [1] as [BIGINT] - 1070
 bindPattern = re.compile( r'binding parameter \[\d+\] as \[.*?\] -(\s(.*))' )
 
 multipleParamPattern = re.compile( r'''^\s+\( (\? (,\s)?)+ \)''', re.VERBOSE )
@@ -109,11 +114,25 @@ paramPattern     = re.compile( r'^\s+(and\s+)?[^\s]+=\?,?$' )
 newQueryPattern  = re.compile( r'^\s+(insert|select|update|delete\b)' )
 methodPattern    = re.compile( r'^\+{3} .*$' )
 
-# 2017-03-08 14:01:02,324 [http-nio-8080-exec-3] DEBUG hibernate.SQL  -
-debugPattern = re.compile( r'^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2},\d+\s\[.*?\]\s(ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\shibernate\.SQL\s+-\s*$' )
-hibernatePattern = re.compile( r'^Hibernate:.*' )
+logPattern = re.compile( r"""
+  ^[-\d\s:,]+
+  \[.*?\]\s+
+  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
+  (.*?)\s+-\s+
+  (\S.*?)$
+  """, re.VERBOSE)
 
-throwAwayPattern = re.compile( r'''
+
+debugPattern = re.compile( r"""
+  ^[-\d\s:,]+
+  \[.*?\]\s+
+  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
+  hibernate\.SQL\s+-\s*$
+  """, re.VERBOSE )
+
+hibernatePattern = re.compile( r"^Hibernate:.*" )
+
+throwAwayPattern = re.compile( r"""
   (^\s+values$) |
   (^\s+\((\?(,\s)?)+\)) |
   (\/java\s.*?Dgrails\.home=.*?classpath.*?IntelliJ\sIDEA) |
@@ -134,8 +153,9 @@ throwAwayPattern = re.compile( r'''
   (^Configuring\s+Spring\s+Security\s+(Core|UI)\s+\.+$) |
   (^\.+\s+finished\s+configuring\s+Spring\s+Security\s+(Core|UI)$) |
   (^Testing\s+started\s+at\s+\d+:\d+\s+[AP]M\s+\.+$) |
-  (^\.+$)
-  ''', re.VERBOSE )
+  (^\.+$) |
+  (^\s*$)
+  """, re.VERBOSE )
 
 
 # remove duplicate queries
@@ -160,6 +180,7 @@ orphan = False
 temp = open( tempFileB, 'w', encoding='utf8' )
 with open( tempFileA, encoding='utf8' ) as log:
   for line in log:
+    line = re.sub( r"\[+", "[", line)
     openCount = line.count('[')
     closeCount = line.count(']')
     if orphan:
@@ -178,7 +199,6 @@ with open( tempFileA, encoding='utf8' ) as log:
         temp.write( '\n' )
 temp.close()
 
-
 # Get a dictionary of values found
 foundValues = {}
 with open( tempFileB, 'r', encoding='utf8' ) as log:
@@ -196,8 +216,10 @@ with open( tempFileB, 'r', encoding='utf8' ) as log:
 temp.close()
 
 
-temp = open( tempFileB, 'w', encoding='utf8' )
-with open( tempFileA, 'r', encoding='utf8' ) as log:
+temp = open(tempFileB, "w", encoding="utf8")
+debug = open(debugFileTemp, "w", encoding="utf8")
+
+with open(tempFileA, "r", encoding="utf8") as log:
   lines = reversed( list( log ))
   for line in lines:
 
@@ -210,7 +232,6 @@ with open( tempFileA, 'r', encoding='utf8' ) as log:
     # here we're replacing placeholders in the queries with the dictionary values from previous pass
     elif asPattern.search(line):
       try:
-        pass
         temp.write( re.sub( asPattern, ' :: ' + foundValues[asPattern.search(line)[1]], line.rstrip()) + '\n' )
 
       except:
@@ -261,29 +282,46 @@ with open( tempFileA, 'r', encoding='utf8' ) as log:
     elif throwAwayPattern.search(line):
       pass
 
-
     elif debugPattern.search(line):
       clearBindings()
 
 
     elif methodPattern.search(line):
       temp.write( line.rstrip() + '\n\n\n' )
+      debug.write( "\n" + line.rstrip() + "\n")
+
+
+    elif logPattern.search(line):
+      msg = re.sub( logPattern, logPattern.search(line)[1] + " :: " + logPattern.search(line)[2], line.rstrip() + "\n" )
+      temp.write(msg)
+      debug.write(msg)
 
 
     else:
       temp.write( line.rstrip() + '\n' )
 
+
 temp.close()
+debug.close()
 
 
-newLog = open( newLogFile, 'w' )
-with open( tempFileB, 'r' ) as log:
+newLog = open( newLogFile, "w" )
+with open( tempFileB, "r" ) as log:
   lines = reversed(list(log))
   for line in lines:
-    newLog.write( line )
+    newLog.write(line.rstrip() + "\n")
 newLog.close()
 
-os.unlink( tempFileA )
-os.unlink( tempFileB )
 
+newDebug = open(debugFile, "w")
+with open(debugFileTemp, "r") as debug:
+  lines = reversed(list(debug))
+  for line in lines:
+    newDebug.write(line.rstrip() + "\n")
+newDebug.close()
+
+
+# os.unlink( tempFileA )
+# os.unlink( tempFileB )
+os.unlink(debugFileTemp)
 
