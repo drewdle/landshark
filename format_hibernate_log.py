@@ -1,21 +1,29 @@
 #!/usr/local/bin/python3
 
+''' # ---
+
+This program takes the console messages and formats them and populates the SQL
+queries' values.
+
+It asks for the name of the input file and the name of the file the program
+should create as output.
+
+It creates a list of tables that have records affected and writes this to a log
+file named by the tablesLogName variable below.
+
+''' # ---
+
+
+# --
+
 
 import re, os, sys, time, io
 
 
-def cleanPath( pathIn ):
-  sep = os.path.sep
-  if sep == "\\":
-    sep = "\\\\" # for windows
-  newPath = re.sub( r"[\\/]", sep, pathIn )
-  return newPath
+# --
 
 
-def clearBindings():
-  bindings[:] = []
-
-
+tablesLogName = "tables.log"
 logFilePath   = ""
 newLogFile    = ""
 debugFile     = ""
@@ -26,61 +34,89 @@ paramCount    = 0
 bindings      = []
 
 
-quitPattern = re.compile( r'^(quit|q|stop|exit)$' )
+# --
+
+
+def cleanPath(pathIn):
+  sep = os.path.sep
+  if sep == "\\":
+    sep = "\\\\" # for windows
+  newPath = re.sub(r"[\\/]", sep, pathIn)
+  return newPath
+
+
+def clearBindings():
+  bindings[:] = []
+
+
+def countTableChanges(label, dictionary):
+  returnString = ""
+  if dictionary:
+    for (k,v) in dictionary.items():
+      returnString += k.rjust(24) + str(v).ljust(4) + "\n"
+  else:
+    returnString = "No records " + label
+  return returnString
+
+
+# --
+
+
+quitPattern = re.compile(r"^(quit|q|stop|exit)$")
 
 
 # Get the path to the log file.
 print()
-while not os.path.isfile( logFilePath ):
-  print( 'Path to log file: ' )
+while not os.path.isfile(logFilePath):
+  print("Path to log file: ")
   logFilePath = cleanPath(input())
-  if quitPattern.search( logFilePath.lower() ):
-    print( 'exiting' )
+  if quitPattern.search(logFilePath.lower()):
+    print("exiting")
     sys.exit()
   if not os.path.isfile(logFilePath):
-    print( '\nlog file ' + logFilePath + ' not found\n' )
+    print("\nlog file " + logFilePath + " not found\n")
 
 
 # Get the user's preference on the output file path.
 print()
 goodNewLogFilePath = False
 while not goodNewLogFilePath:
-  print( 'Output file name:\n(Enter for ' + logFilePath + '.sql)' )
+  print("Output file name:\n(Enter for " + logFilePath + ".sql)")
   newLogFile = cleanPath(input())
   if quitPattern.search(newLogFile.lower()):
-    print( 'exiting' )
+    print("exiting")
     sys.exit()
-  elif newLogFile is None or newLogFile == '':
-    newLogFile = logFilePath + '.sql'
+  elif newLogFile is None or newLogFile == "":
+    newLogFile = logFilePath + ".sql"
     break
   elif newLogFile.lower() == logFilePath.lower():
-    print( '\nno. just... no\n' )
+    print("\nno. just... no\n")
     time.sleep(1)
-    print( 'you\'re not even paying attention at this point, are you?' )
+    print("you're not even paying attention at this point, are you?")
     time.sleep(1)
-    print( '(output file name cannot be the same as the input file name)' )
+    print("(output file name cannot be the same as the input file name)")
     time.sleep(1)
-    print( 'try again...' )
+    print("try again...")
     time.sleep(1)
     print()
     continue
-  elif os.path.isfile( newLogFile ):
-    print( 'file "' + newLogFile + '" already exists' )
-    print( 'type "yes" to overwrite' )
+  elif os.path.isfile(newLogFile):
+    print("file '" + newLogFile + "' already exists")
+    print("type 'yes' to overwrite")
     overWriteInput = input().lower()
-    if overWriteInput == 'yes':
+    if overWriteInput == "yes":
       break
-  elif not os.path.exists( os.path.dirname(newLogFile) ):
-    newPath = os.path.dirname( newLogFile )
-    print( "the directory '" + newPath + "' doesn't exist." )
-    print( 'create directory path "' + newPath + '"? [y/n]' )
+  elif not os.path.exists(os.path.dirname(newLogFile)):
+    newPath = os.path.dirname(newLogFile)
+    print("the directory '" + newPath + "' doesn't exist.")
+    print("create directory path '" + newPath + "'? [y/n]")
     createPathInput = input().lower()
-    if createPathInput == 'y':
+    if createPathInput == "y":
       try:
-        os.makedirs( newPath )
+        os.makedirs(newPath)
         break
       except:
-        print( 'could not create directory path "' + newPath + '"' )
+        print("could not create directory path '" + newPath + "'")
         print()
         continue
     else:
@@ -92,29 +128,29 @@ debugFileTemp = debugFile + ".tmp"
 
 
 # let's go!
-print( 'working...\n' )
+print("working...\n")
 
-foundPattern = re.compile( r'''
+foundPattern = re.compile(r"""
   (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
   .*?\s+-\s+found\s+
   \[(.*?)\]\]?\s+as\s+
   column\s+
   \[([^\]]+)\]
-  ''', re.VERBOSE )
+  """, re.VERBOSE)
 
-asPattern = re.compile( r'(?<!\])\s+as\s+([A-z0-9\.\_]+),?' )
+asPattern = re.compile(r"(?<!\])\s+as\s+([A-z0-9\.\_]+),?")
 
-bindPattern = re.compile( r'binding parameter \[\d+\] as \[.*?\] -(\s(.*))' )
+bindPattern = re.compile(r"binding parameter \[\d+\] as \[.*?\] -(\s(.*))")
 
-multipleParamPattern = re.compile( r'''^\s+\( (\? (,\s)?)+ \)''', re.VERBOSE )
+multipleParamPattern = re.compile(r"""^\s+\((\? (,\s)?)+ \)""", re.VERBOSE)
 
-multipleBindingPattern = re.compile( r'''^\s+\( ((\w+(,\s)?)+) \)''', re.VERBOSE )
+multipleBindingPattern = re.compile(r"""^\s+\(((\w+(,\s)?)+) \)""", re.VERBOSE)
 
-paramPattern     = re.compile( r'^\s+(and\s+)?[^\s]+=\?,?$' )
-newQueryPattern  = re.compile( r'^\s+(insert|select|update|delete\b)' )
-methodPattern    = re.compile( r'^\+{3} .*$' )
+paramPattern     = re.compile(r"^\s+(and\s+)?[^\s]+=\?,?$")
+newQueryPattern  = re.compile(r"^\s+(insert|select|update|delete\b)")
+methodPattern    = re.compile(r"^\+{3} .*$")
 
-logPattern = re.compile( r"""
+logPattern = re.compile(r"""
   ^[-\d\s:,]+
   \[.*?\]\s+
   (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
@@ -123,28 +159,25 @@ logPattern = re.compile( r"""
   """, re.VERBOSE)
 
 
-debugPattern = re.compile( r"""
+debugPattern = re.compile(r"""
   ^[-\d\s:,]+
   \[.*?\]\s+
   (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
   hibernate\.SQL\s+-\s*$
-  """, re.VERBOSE )
+  """, re.VERBOSE)
 
-hibernatePattern = re.compile( r"^Hibernate:.*" )
+hibernatePattern = re.compile(r"^Hibernate:.*")
 
-throwAwayPattern = re.compile( r"""
+throwAwayPattern = re.compile(r"""
   (^\s+values$) |
   (^\s+\((\?(,\s)?)+\)) |
   (\/java\s.*?Dgrails\.home=.*?classpath.*?IntelliJ\sIDEA) |
   (^[-\d\s:,]+\[.*?\]\s
-    DEBUG\s+type\.BasicTypeRegistry\s+-\s+Adding\s+type\s+registration.*?->\s+org\.hibernate\.type\..*?Type\@
-  ) |
+    DEBUG\s+type\.BasicTypeRegistry\s+-\s+Adding\s+type\s+registration.*?->\s+org\.hibernate\.type\..*?Type\@) |
   (^[-\d\s:,]+\[.*?\]\s+
-    INFO\s+type\.BasicTypeRegistry\s+-\s+Type\sregistration\s+\[.*?\]\s+overrides\s+previous
-  ) |
+    INFO\s+type\.BasicTypeRegistry\s+-\s+Type\sregistration\s+\[.*?\]\s+overrides\s+previous) |
   (^[-\d\s:,]+\[.*?\]\s+
-    TRACE\s+type\.TypeFactory\s+-\s+Scoping\s+types\s+to\s+session\s+factory\s+org\.hibernate\.impl\.SessionFactoryImpl\@
-  ) |
+    TRACE\s+type\.TypeFactory\s+-\s+Scoping\s+types\s+to\s+session\s+factory\s+org\.hibernate\.impl\.SessionFactoryImpl\@) |
   (^\|Configuring\s+classpath$)             |
   (^\|Compiling\s+\d+\s+source\s+files$)    |
   (^\|Packaging\s+Grails\s+application$)    |
@@ -155,64 +188,64 @@ throwAwayPattern = re.compile( r"""
   (^Testing\s+started\s+at\s+\d+:\d+\s+[AP]M\s+\.+$) |
   (^\.+$) |
   (^\s*$)
-  """, re.VERBOSE )
+  """, re.VERBOSE)
 
 
 # remove duplicate queries
 inDebug = False
-temp = open( tempFileA, 'w', encoding='utf8' )
-with open( logFilePath, encoding='utf8' ) as log:
+temp = open(tempFileA, "w", encoding="utf8")
+with open(logFilePath, encoding="utf8") as log:
   for line in log:
-    if debugPattern.search( line ):
-      temp.write( line.rstrip() + '\n' )
+    if debugPattern.search(line):
+      temp.write(line.rstrip() + "\n")
       inDebug = True
-    elif hibernatePattern.search( line ):
+    elif hibernatePattern.search(line):
       inDebug = False
     else:
       if inDebug:
         pass
       else:
-        temp.write( line.rstrip() + '\n' )
+        temp.write(line.rstrip() + "\n")
 temp.close()
 
 # putting multiline strings on one line
 orphan = False
-temp = open( tempFileB, 'w', encoding='utf8' )
-with open( tempFileA, encoding='utf8' ) as log:
+temp = open(tempFileB, "w", encoding="utf8")
+with open(tempFileA, encoding="utf8") as log:
   for line in log:
-    line = re.sub( r"\[+", "[", line)
-    openCount = line.count('[')
-    closeCount = line.count(']')
+    line = re.sub(r"\[+", "[", line)
+    openCount = line.count("[")
+    closeCount = line.count("]")
     if orphan:
-      if line[0].isalpha() or line[0] == '"' or line[0] == '}':
-        temp.write( ' ' )
+      if line[0].isalpha() or line[0] == '"' or line[0] == "}":
+        temp.write(" ")
 
-    temp.write( line.rstrip() )
+    temp.write(line.rstrip())
 
     if openCount > closeCount:
       orphan = True
     elif openCount < closeCount:
       orphan = False
-      temp.write( '\n' )
+      temp.write("\n")
     else:
       if not orphan:
-        temp.write( '\n' )
+        temp.write("\n")
 temp.close()
 
 # Get a dictionary of values found
 foundValues = {}
-with open( tempFileB, 'r', encoding='utf8' ) as log:
+with open(tempFileB, "r", encoding="utf8") as log:
   for line in log:
     if foundPattern.search(line):
       mo = foundPattern.search(line)
       foundValues[mo[2]] = mo[1]
 
 
-temp = open( tempFileA, 'w', encoding='utf8' )
-with open( tempFileB, 'r', encoding='utf8' ) as log:
+temp = open(tempFileA, "w", encoding="utf8")
+with open(tempFileB, "r", encoding="utf8") as log:
   for line in list(log):
-    line = re.sub( r'\s{4}', '  ', line )
-    temp.write( line )
+    line = re.sub(r"\s{4}", "  ", line)
+    temp.write(line)
 temp.close()
 
 
@@ -220,7 +253,7 @@ temp = open(tempFileB, "w", encoding="utf8")
 debug = open(debugFileTemp, "w", encoding="utf8")
 
 with open(tempFileA, "r", encoding="utf8") as log:
-  lines = reversed( list( log ))
+  lines = reversed(list(log))
   for line in lines:
 
 
@@ -232,19 +265,19 @@ with open(tempFileA, "r", encoding="utf8") as log:
     # here we're replacing placeholders in the queries with the dictionary values from previous pass
     elif asPattern.search(line):
       try:
-        temp.write( re.sub( asPattern, ' :: ' + foundValues[asPattern.search(line)[1]], line.rstrip()) + '\n' )
+        temp.write(re.sub(asPattern, " :: " + foundValues[asPattern.search(line)[1]], line.rstrip()) + "\n")
 
       except:
         # no match found
-        temp.write( line.rstrip() + ' .. no match ..\n' )
+        temp.write(line.rstrip() + " .. no match ..\n")
 
 
     # this line defines a value for a parameter used below
     elif bindPattern.search(line):
       bindingValue = bindPattern.search(line)[2]
-      if bindingValue is None or bindingValue == '':
+      if bindingValue is None or bindingValue == "":
         bindingValue = "''"
-      bindings.append( bindingValue )
+      bindings.append(bindingValue)
       paramCount = 0
 
 
@@ -252,22 +285,22 @@ with open(tempFileA, "r", encoding="utf8") as log:
       matchedVal = multipleBindingPattern.search(line)
       mbCount = len(bindings) - 1
       mbValues = []
-      padding = re.search( r'^(\s*)', line ).group(1) + '  '
-      for binding in re.findall( '\w+', line ):
+      padding = re.search(r"^(\s*)", line).group(1) + "  "
+      for binding in re.findall("\w+", line):
         try:
-          mbValues.append( binding + ' = ' + bindings[mbCount] )
+          mbValues.append(binding + " = " + bindings[mbCount])
         except:
-          mbValues.append( binding + ' = ???' )
+          mbValues.append(binding + " = ???")
         mbCount -= 1
       for mbValue in mbValues:
-        values = mbValue.split( ' = ' )
-        temp.write( padding + values[0].ljust( 30 ) + ' = ' + values[1] + '\n' )
+        values = mbValue.split(" = ")
+        temp.write(padding + values[0].ljust(30) + " = " + values[1] + "\n")
 
 
     # this is a parameter (?) that needs bound to a value from above
     elif paramPattern.search(line):
       try:
-        temp.write( line.rstrip() + '    ' + bindings[paramCount] + '\n' )
+        temp.write(line.rstrip() + "    " + bindings[paramCount] + "\n")
       except:
         pass
       paramCount += 1
@@ -276,7 +309,7 @@ with open(tempFileA, "r", encoding="utf8") as log:
     # resetting the count of params so the next set of bindings starts at the beginning of the list of bindings
     elif newQueryPattern.search(line):
       paramCount = 0
-      temp.write( line.rstrip() + '\n\n' )
+      temp.write(line.rstrip() + "\n\n")
 
 
     elif throwAwayPattern.search(line):
@@ -287,30 +320,100 @@ with open(tempFileA, "r", encoding="utf8") as log:
 
 
     elif methodPattern.search(line):
-      temp.write( line.rstrip() + '\n\n\n' )
-      debug.write( "\n" + line.rstrip() + "\n")
+      temp.write(line.rstrip() + "\n\n\n")
+      debug.write("\n" + line.rstrip() + "\n")
 
 
     elif logPattern.search(line):
-      msg = re.sub( logPattern, logPattern.search(line)[1] + " :: " + logPattern.search(line)[2], line.rstrip() + "\n" )
+      msg = re.sub(logPattern, logPattern.search(line)[1] + " :: " + logPattern.search(line)[2], line.rstrip() + "\n")
       temp.write(msg)
       debug.write(msg)
 
 
     else:
-      temp.write( line.rstrip() + '\n' )
+      temp.write(line.rstrip() + '\n')
 
+
+# Here we are putting the formatted log file back in the right order.
+# Also, we're building a dictionary of the tables that have records added,
+# updated, or deleted. The results will be written to the file named by the
+# tablesLogName string.
 
 temp.close()
 debug.close()
 
+tablesLog      = open(tablesLogName, "w")
+tablesUpdated  = {}
+tablesDeleted  = {}
+tablesInserted = {}
+insertSwitch   = False
+deleteSwitch   = False
+updateSwitch   = False
+lineCount      = 0
 
-newLog = open( newLogFile, "w" )
-with open( tempFileB, "r" ) as log:
+newLog = open(newLogFile, "w")
+with open(tempFileB, "r") as log:
   lines = reversed(list(log))
   for line in lines:
     newLog.write(line.rstrip() + "\n")
+
+    if re.match(r"^\s*insert\s*$", line, re.IGNORECASE):
+      (insertSwitch, deleteSwitch, updateSwitch, lineCount) = (True, False, False, 0)
+    elif re.match(r"^\s*delete\s*$", line, re.IGNORECASE):
+      (insertSwitch, deleteSwitch, updateSwitch, lineCount) = (False, True, False, 0)
+    elif re.match(r"^\s*update\s*$", line, re.IGNORECASE):
+      (insertSwitch, deleteSwitch, updateSwitch, lineCount) = (False, False, True, 0)
+    elif re.match(r"^\s*(\w+)\s*$", line):
+      lineCount = lineCount + 1
+
+      if insertSwitch and lineCount == 2:
+        insertSwitch = False
+        table = line.strip()
+        if table in tablesInserted:
+          tablesInserted[table] += 1
+        else:
+          tablesInserted[table] = 1
+
+      if deleteSwitch and lineCount == 2:
+        deleteSwitch = False
+        if table in tablesDeleted:
+          tablesDeleted[table] += 1
+        else:
+          tablesDeleted[table] = 1
+
+      if updateSwitch and lineCount == 1:
+        updateSwitch = False
+        if table in tablesUpdated:
+          tablesUpdated[table] += 1
+        else:
+          tablesUpdated[table] = 1
+
+    else:
+      lineCount = lineCount + 1
+
+
+tablesWithInsertedRecords = countTableChanges("inserted", tablesInserted)
+tablesWithUpdatedRecords  = countTableChanges("updated",  tablesUpdated)
+tablesWithDeletedRecords  = countTableChanges("deleted",  tablesDeleted)
+
+tablesLog.write("""Tables with INSERTED records:
+
+%s
+
+
+Tables with UPDATED records:
+
+%s
+
+
+Tables with DELETED records:
+
+%s
+
+""" % (tablesWithInsertedRecords, tablesWithUpdatedRecords, tablesWithDeletedRecords))
+
 newLog.close()
+tablesLog.close()
 
 
 newDebug = open(debugFile, "w")
@@ -321,7 +424,7 @@ with open(debugFileTemp, "r") as debug:
 newDebug.close()
 
 
-os.unlink( tempFileA )
-os.unlink( tempFileB )
+os.unlink(tempFileA)
+os.unlink(tempFileB)
 os.unlink(debugFileTemp)
 
