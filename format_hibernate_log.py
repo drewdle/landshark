@@ -321,7 +321,7 @@ with open(debugFileTemp, "r") as debug:
 newDebug.close()
 
 
-# os.unlink( tempFileA )
-# os.unlink( tempFileB )
+os.unlink( tempFileA )
+os.unlink( tempFileB )
 os.unlink(debugFileTemp)
 
