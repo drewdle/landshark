@@ -9,9 +9,15 @@ output comma-separated values filename. Then it connects to the database -- if
 it can -- and creates the output file which is a list of tables with the count
 of records in each table.
 
+In testing, run this before triggering the action you are wanting to test, then
+run it again after triggering the action. Save the two executions as two
+different files. Then compare the two (with compare_reconrd_counts.py is easy).
+
 ''' # ---
 
+
 import mysql.connector, sys, datetime
+
 
 def getFromUser(prompt, primer):
     print(prompt + " [" + primer + "]")
