@@ -52,7 +52,7 @@ def countTableChanges(label, dictionary):
   returnString = ""
   if dictionary:
     for (k,v) in dictionary.items():
-      returnString += k.rjust(24) + str(v).ljust(4) + "\n"
+      returnString += k.ljust(48) + str(v).rjust(3) + "\n"
   else:
     returnString = "No records " + label
   return returnString
@@ -142,7 +142,7 @@ while not os.path.isfile(logFilePath):
 # Get the user's preference on the output file path.
 newLogFile = ""
 print()
-while True
+while True:
   print("Output file name:\n(Enter for " + logFilePath + ".sql)")
   newLogFile = cleanPath(input())
   if quitPattern.search(newLogFile.lower()):
@@ -384,10 +384,10 @@ with open(tempFileB, "r") as log:
       (insertSwitch, deleteSwitch, updateSwitch, lineCount) = (False, False, True, 0)
     elif re.match(r"^\s*(\w+)\s*$", line):
       lineCount = lineCount + 1
+      table = line.strip()
 
       if insertSwitch and lineCount == 2:
         insertSwitch = False
-        table = line.strip()
         if table in tablesInserted:
           tablesInserted[table] += 1
         else:
