@@ -2,19 +2,22 @@
 
 ''' # ---
 
+2017-03-28 22:55
+
 This program takes the console messages and formats them and populates the SQL
 queries' values.
 
 It asks for the name of the input file and the name of the file the program
-should create as output.
+should create as output. The output file will be named [input_file_name].sql
+if an output file name is not specified.
+
+An [output_file_name].debug file will be created, as well, listing any debug
+(log.debug) messages in the log.
 
 It creates a list of tables that have records affected and writes this to a log
 file named by the tablesLogName variable below.
 
 ''' # ---
-
-
-# --
 
 
 import re, os, sys, time, io
@@ -24,10 +27,6 @@ import re, os, sys, time, io
 
 
 tablesLogName = "tables.log"
-logFilePath   = ""
-newLogFile    = ""
-debugFile     = ""
-debugFileTemp = ""
 tempFileA     = "temp_logA.tmplog"
 tempFileB     = "temp_logB.tmplog"
 paramCount    = 0
@@ -64,9 +63,72 @@ def countTableChanges(label, dictionary):
 
 quitPattern = re.compile(r"^(quit|q|stop|exit)$")
 
+foundPattern = re.compile(r"""
+  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
+  .*?\s+-\s+found\s+
+  \[(.*?)\]\]?\s+as\s+
+  column\s+
+  \[([^\]]+)\]
+  """, re.VERBOSE)
+
+asPattern = re.compile(r"(?<!\])\s+as\s+([A-z0-9\.\_]+),?")
+
+bindPattern = re.compile(r"binding parameter \[\d+\] as \[.*?\] -(\s(.*))")
+
+multipleParamPattern = re.compile(r"""^\s+\((\? (,\s)?)+ \)""", re.VERBOSE)
+
+multipleBindingPattern = re.compile(r"""^\s+\(((\w+(,\s)?)+) \)""", re.VERBOSE)
+
+paramPattern     = re.compile(r"^\s+(and\s+)?[^\s]+=\?,?$")
+newQueryPattern  = re.compile(r"^\s+(insert|select|update|delete\b)")
+methodPattern    = re.compile(r"^\+{3} .*$")
+
+logPattern = re.compile(r"""
+  ^[-\d\s:,]+
+  \[.*?\]\s+
+  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
+  (.*?)\s+-\s+
+  (\S.*?)$
+  """, re.VERBOSE)
+
+debugPattern = re.compile(r"""
+  ^[-\d\s:,]+
+  \[.*?\]\s+
+  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
+  hibernate\.SQL\s+-\s*$
+  """, re.VERBOSE)
+
+hibernatePattern = re.compile(r"^Hibernate:.*")
+
+throwAwayPattern = re.compile(r"""
+  (^\s+values$) |
+  (^\s+\((\?(,\s)?)+\)) |
+  (\/java\s.*?Dgrails\.home=.*?classpath.*?IntelliJ\sIDEA) |
+  (^[-\d\s:,]+\[.*?\]\s
+    DEBUG\s+type\.BasicTypeRegistry\s+-\s+Adding\s+type\s+registration.*?->\s+org\.hibernate\.type\..*?Type\@) |
+  (^[-\d\s:,]+\[.*?\]\s+
+    INFO\s+type\.BasicTypeRegistry\s+-\s+Type\sregistration\s+\[.*?\]\s+overrides\s+previous) |
+  (^[-\d\s:,]+\[.*?\]\s+
+    TRACE\s+type\.TypeFactory\s+-\s+Scoping\s+types\s+to\s+session\s+factory\s+org\.hibernate\.impl\.SessionFactoryImpl\@) |
+  (^\|Configuring\s+classpath$)             |
+  (^\|Compiling\s+\d+\s+source\s+files$)    |
+  (^\|Packaging\s+Grails\s+application$)    |
+  (^\|Running\s+Grails\s+application$)      |
+  (^\|Enabling\s+Tomcat\s+NIO\s+connector$) |
+  (^Configuring\s+Spring\s+Security\s+(Core|UI)\s+\.+$) |
+  (^\.+\s+finished\s+configuring\s+Spring\s+Security\s+(Core|UI)$) |
+  (^Testing\s+started\s+at\s+\d+:\d+\s+[AP]M\s+\.+$) |
+  (^\.+$) |
+  (^\s*$)
+  """, re.VERBOSE)
+
+
+# ---
+
 
 # Get the path to the log file.
 print()
+logFilePath = ""
 while not os.path.isfile(logFilePath):
   print("Path to log file: ")
   logFilePath = cleanPath(input())
@@ -78,9 +140,9 @@ while not os.path.isfile(logFilePath):
 
 
 # Get the user's preference on the output file path.
+newLogFile = ""
 print()
-goodNewLogFilePath = False
-while not goodNewLogFilePath:
+while True
   print("Output file name:\n(Enter for " + logFilePath + ".sql)")
   newLogFile = cleanPath(input())
   if quitPattern.search(newLogFile.lower()):
@@ -127,68 +189,14 @@ debugFile = newLogFile + ".debug"
 debugFileTemp = debugFile + ".tmp"
 
 
+# ---
+
+
 # let's go!
 print("working...\n")
 
-foundPattern = re.compile(r"""
-  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
-  .*?\s+-\s+found\s+
-  \[(.*?)\]\]?\s+as\s+
-  column\s+
-  \[([^\]]+)\]
-  """, re.VERBOSE)
 
-asPattern = re.compile(r"(?<!\])\s+as\s+([A-z0-9\.\_]+),?")
-
-bindPattern = re.compile(r"binding parameter \[\d+\] as \[.*?\] -(\s(.*))")
-
-multipleParamPattern = re.compile(r"""^\s+\((\? (,\s)?)+ \)""", re.VERBOSE)
-
-multipleBindingPattern = re.compile(r"""^\s+\(((\w+(,\s)?)+) \)""", re.VERBOSE)
-
-paramPattern     = re.compile(r"^\s+(and\s+)?[^\s]+=\?,?$")
-newQueryPattern  = re.compile(r"^\s+(insert|select|update|delete\b)")
-methodPattern    = re.compile(r"^\+{3} .*$")
-
-logPattern = re.compile(r"""
-  ^[-\d\s:,]+
-  \[.*?\]\s+
-  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
-  (.*?)\s+-\s+
-  (\S.*?)$
-  """, re.VERBOSE)
-
-
-debugPattern = re.compile(r"""
-  ^[-\d\s:,]+
-  \[.*?\]\s+
-  (?:ALL|DEBUG|ERROR|FATAL|INFO|TRACE|WARN)\s+
-  hibernate\.SQL\s+-\s*$
-  """, re.VERBOSE)
-
-hibernatePattern = re.compile(r"^Hibernate:.*")
-
-throwAwayPattern = re.compile(r"""
-  (^\s+values$) |
-  (^\s+\((\?(,\s)?)+\)) |
-  (\/java\s.*?Dgrails\.home=.*?classpath.*?IntelliJ\sIDEA) |
-  (^[-\d\s:,]+\[.*?\]\s
-    DEBUG\s+type\.BasicTypeRegistry\s+-\s+Adding\s+type\s+registration.*?->\s+org\.hibernate\.type\..*?Type\@) |
-  (^[-\d\s:,]+\[.*?\]\s+
-    INFO\s+type\.BasicTypeRegistry\s+-\s+Type\sregistration\s+\[.*?\]\s+overrides\s+previous) |
-  (^[-\d\s:,]+\[.*?\]\s+
-    TRACE\s+type\.TypeFactory\s+-\s+Scoping\s+types\s+to\s+session\s+factory\s+org\.hibernate\.impl\.SessionFactoryImpl\@) |
-  (^\|Configuring\s+classpath$)             |
-  (^\|Compiling\s+\d+\s+source\s+files$)    |
-  (^\|Packaging\s+Grails\s+application$)    |
-  (^\|Running\s+Grails\s+application$)      |
-  (^\|Enabling\s+Tomcat\s+NIO\s+connector$) |
-  (^Configuring\s+Spring\s+Security\s+(Core|UI)\s+\.+$) |
-  (^\.+\s+finished\s+configuring\s+Spring\s+Security\s+(Core|UI)$) |
-  (^Testing\s+started\s+at\s+\d+:\d+\s+[AP]M\s+\.+$) |
-  (^\.+$) |
-  (^\s*$)
-  """, re.VERBOSE)
+# ---
 
 
 # remove duplicate queries
@@ -207,6 +215,10 @@ with open(logFilePath, encoding="utf8") as log:
       else:
         temp.write(line.rstrip() + "\n")
 temp.close()
+
+
+# ---
+
 
 # putting multiline strings on one line
 orphan = False
@@ -231,6 +243,10 @@ with open(tempFileA, encoding="utf8") as log:
       if not orphan:
         temp.write("\n")
 temp.close()
+
+
+# ---
+
 
 # Get a dictionary of values found
 foundValues = {}
@@ -334,6 +350,9 @@ with open(tempFileA, "r", encoding="utf8") as log:
       temp.write(line.rstrip() + '\n')
 
 
+# ---
+
+
 # Here we are putting the formatted log file back in the right order.
 # Also, we're building a dictionary of the tables that have records added,
 # updated, or deleted. The results will be written to the file named by the
@@ -416,6 +435,9 @@ newLog.close()
 tablesLog.close()
 
 
+# ---
+
+
 newDebug = open(debugFile, "w")
 with open(debugFileTemp, "r") as debug:
   lines = reversed(list(debug))
@@ -424,7 +446,13 @@ with open(debugFileTemp, "r") as debug:
 newDebug.close()
 
 
+# ---
+
+
 os.unlink(tempFileA)
 os.unlink(tempFileB)
 os.unlink(debugFileTemp)
+
+
+# ---
 
