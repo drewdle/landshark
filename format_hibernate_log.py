@@ -26,7 +26,6 @@ import re, os, sys, time, io
 # --
 
 
-tablesLogName = "tables.log"
 tempFileA     = "temp_logA.tmplog"
 tempFileB     = "temp_logB.tmplog"
 paramCount    = 0
@@ -77,7 +76,17 @@ bindPattern = re.compile(r"binding parameter \[\d+\] as \[.*?\] -(\s(.*))")
 
 multipleParamPattern = re.compile(r"""^\s+\((\? (,\s)?)+ \)""", re.VERBOSE)
 
-multipleBindingPattern = re.compile(r"""^\s+\(((\w+(,\s)?)+) \)""", re.VERBOSE)
+multipleBindingPattern = re.compile(r"""
+  ^\s+
+  \(
+  (?:
+  `?        # optional for quoted fields... like `password`
+  (\w+)     # the word we care about
+  `?        # optional for quoted fields
+  (?:,\s+)?
+  )+
+  \)
+  """, re.VERBOSE)
 
 paramPattern     = re.compile(r"^\s+(and\s+)?[^\s]+=\?,?$")
 newQueryPattern  = re.compile(r"^\s+(insert|select|update|delete\b)")
@@ -185,8 +194,9 @@ while True:
       continue
 
 
-debugFile = newLogFile + ".debug"
+debugFile = os.path.splitext(newLogFile)[0] + ".debug"
 debugFileTemp = debugFile + ".tmp"
+tablesLogName = os.path.splitext(newLogFile)[0] + ".tables"
 
 
 # ---
@@ -268,10 +278,11 @@ temp.close()
 temp = open(tempFileB, "w", encoding="utf8")
 debug = open(debugFileTemp, "w", encoding="utf8")
 
+linect = 0
 with open(tempFileA, "r", encoding="utf8") as log:
   lines = reversed(list(log))
   for line in lines:
-
+    linect += 1
 
     # suppressing the lines with the trace results
     if foundPattern.search(line):
@@ -415,17 +426,17 @@ tablesWithInsertedRecords = countTableChanges("inserted", tablesInserted)
 tablesWithUpdatedRecords  = countTableChanges("updated",  tablesUpdated)
 tablesWithDeletedRecords  = countTableChanges("deleted",  tablesDeleted)
 
-tablesLog.write("""Tables with INSERTED records:
+tablesLog.write("""INSERTS:
 
 %s
 
 
-Tables with UPDATED records:
+UPDATES:
 
 %s
 
 
-Tables with DELETED records:
+DELETES:
 
 %s
 
